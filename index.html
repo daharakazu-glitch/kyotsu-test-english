@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>共通テスト英語 オリジナル問題ジェネレーター</title>
+<title>共通テスト英語ジェネレーター（先生用ローカル版）</title>
 </head>
 <body>
 <!-- 共通テスト英語 オリジナル問題ジェネレーター（リスニング・リーディング全形式対応 / Claude API使用） -->
@@ -72,10 +72,16 @@
 <div class="wrap">
   <header class="hero">
     <h1>共通テスト英語　オリジナル問題ジェネレーター</h1>
-    <div class="sub">令和7年度本試験と同形式・同水準（CEFR A2〜B1中心）のオリジナル問題をAIが作成します。大問を選んで「問題を作成」を押してください。</div>
-    <div class="stamp">授業用<br>教材</div>
+    <div class="sub">令和7年度本試験と同形式・同水準のオリジナル問題を作成します。AI生成にはお手持ちのAnthropic APIキーを下の欄に貼り付けてください（キーはこのページ内でのみ使用し、保存・送信されません。ページを閉じると消えます）。</div>
+    <div class="stamp">先生用<br>ローカル版</div>
     <div style="position:absolute;bottom:6px;right:14px;font-size:.68rem;color:#8a93a8">v1.7（2026-07-11版）</div>
   </header>
+
+  <div class="noprint" style="border:1.5px solid var(--gold);background:#fbf8ef;padding:12px 14px;margin-bottom:14px;font-size:.85rem">
+    <b>APIキー</b>（<span style="font-family:monospace">sk-ant-</span> で始まる文字列）：
+    <input type="password" id="apikey" placeholder="sk-ant-..." style="width:min(420px,90%);padding:6px 8px;border:1px solid var(--line);font-family:monospace">
+    <div style="color:#6b5a2a;margin-top:6px">※ このファイルは先生のPC内でのみ開いてください。キーを入れたままWeb上（GitHub Pages等）に公開しないでください。キー未入力でも「収録問題を表示」は使えます。</div>
+  </div>
 
   <div class="tabs">
     <button id="tabL" class="on" onclick="setMode('L')">リスニング</button>
@@ -228,40 +234,70 @@ function showBank(){
   document.getElementById('status').textContent=q.daimon+'（収録問題）を表示しました（'+((performance.now()-t0)/1000).toFixed(2)+'秒）';
 }
 
-async function callOnce(messages, model){
+async function callOnce(messages, model, onProgress){
+  const key=document.getElementById('apikey').value.trim();
+  if(!key) throw new Error('APIキーが入力されていません。上の欄に sk-ant- で始まるキーを貼り付けてください');
   const res=await fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({model, max_tokens:1000, messages})});
-  let data;
-  try{ data=await res.json(); }
-  catch(_){ throw new Error('サーバー応答の解析に失敗（HTTP '+res.status+'）'); }
-  if(data.error) throw new Error(data.error.message||('APIエラー（HTTP '+res.status+'）'));
-  const text=(data.content||[]).filter(i=>i.type==="text").map(i=>i.text).join("");
+    method:"POST",
+    headers:{
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body:JSON.stringify({model, max_tokens:4000, stream:true, messages})});
+  if(!res.ok){
+    let msg=''; try{ const d=await res.json(); msg=(d.error&&d.error.message)||''; }catch(_){}
+    if(res.status===401) throw new Error('APIキーが正しくないか、無効です。キーを確認してください');
+    if(res.status===400 && /credit|billing/i.test(msg)) throw new Error('APIの残高が不足しています。console.anthropic.com で支払い設定を確認してください');
+    if(res.status===429) throw new Error('リクエストが混み合っています。少し待ってから再試行してください');
+    throw new Error(msg||('APIエラー（HTTP '+res.status+'）'));
+  }
+  // ストリーミング受信：届いた分から逐次読み取り、進捗を表示する
+  const reader=res.body.getReader();
+  const dec=new TextDecoder();
+  let buf='', text='', stopReason=null;
+  while(true){
+    const {done, value}=await reader.read();
+    if(done) break;
+    buf+=dec.decode(value,{stream:true});
+    const lines=buf.split('\n'); buf=lines.pop();
+    for(const line of lines){
+      if(!line.startsWith('data:')) continue;
+      const payload=line.slice(5).trim();
+      if(!payload||payload==='[DONE]') continue;
+      let ev; try{ ev=JSON.parse(payload); }catch(_){ continue; }
+      if(ev.type==='content_block_delta' && ev.delta && ev.delta.text){
+        text+=ev.delta.text;
+        if(onProgress) onProgress(text.length);
+      }else if(ev.type==='message_delta' && ev.delta && ev.delta.stop_reason){
+        stopReason=ev.delta.stop_reason;
+      }else if(ev.type==='error'){
+        throw new Error((ev.error&&ev.error.message)||'ストリーミング中にエラーが発生しました');
+      }
+    }
+  }
   if(!text) throw new Error('空の応答が返されました');
-  return {text, truncated: data.stop_reason==="max_tokens"};
+  return {text, truncated: stopReason==="max_tokens"};
 }
 
 async function callAPI(messages, st){
-  // ① 通常API → ②リトライ → ③別モデル → ④旧方式(window.claude.complete) の順に自動で切り替える
   const models=["claude-sonnet-4-6","claude-haiku-4-5-20251001"];
+  const t0=Date.now();
+  const onProgress=st?(chars)=>{ st.textContent=`作成中… ${Math.round((Date.now()-t0)/1000)}秒経過（${chars}文字受信）`; }:null;
   let lastErr=null;
   for(const model of models){
     for(let attempt=1; attempt<=2; attempt++){
-      try{ return await callOnce(messages, model); }
+      try{ return await callOnce(messages, model, onProgress); }
       catch(e){
         lastErr=e;
+        if(/APIキー|残高/.test(e.message)) throw e;
         if(st) st.textContent=`通信を再試行しています…（${e.message}）`;
         await sleep(1500*attempt);
       }
     }
   }
-  if(window.claude && typeof window.claude.complete==='function'){
-    if(st) st.textContent='別方式で作成中…';
-    const joined=messages.map(m=>m.content).join('\n\n上記の続きから出力してください:\n');
-    const text=await window.claude.complete(joined);
-    if(text) return {text, truncated:false};
-  }
-  throw lastErr||new Error('すべての方式で失敗しました');
+  throw lastErr||new Error('通信に失敗しました');
 }
 
 async function generate(){
@@ -269,7 +305,7 @@ async function generate(){
   const btn=document.getElementById('genBtn'), st=document.getElementById('status'), err=document.getElementById('err');
   btn.disabled=true; err.style.display='none'; ansShown=false;
   speechSynthesis.cancel();
-  st.textContent='作成中…（30〜60秒ほどかかります）';
+  st.textContent='作成中…（1問なら約20秒、フルセットは1〜2分かかります）';
   try{
     const nq = document.getElementById('qcount').value==='1' ? 1 : s.n;
     const prompt=buildPrompt(s, nq);
