@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>共通テスト英語 オリジナル問題ジェネレーター</title>
+</head>
+<body>
+<!-- 共通テスト英語 オリジナル問題ジェネレーター（リスニング・リーディング全形式対応 / Claude API使用） -->
+<style>
+  :root{
+    --ink:#1b2a4a;        /* 冊子の濃紺 */
+    --paper:#fdfdfa;
+    --bg:#eef0ec;
+    --accent:#b3362b;     /* 採点朱 */
+    --line:#c9cdc4;
+    --gold:#8a6d2f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif;line-height:1.7}
+  .wrap{max-width:960px;margin:0 auto;padding:20px 16px 80px}
+  header.hero{border:3px double var(--ink);background:var(--paper);padding:22px 24px;margin-bottom:18px;position:relative}
+  header.hero h1{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;font-size:1.5rem;letter-spacing:.12em}
+  header.hero .sub{font-size:.82rem;color:#4c5a76;margin-top:4px}
+  header.hero .stamp{position:absolute;top:14px;right:18px;border:2px solid var(--accent);color:var(--accent);border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;font-size:.66rem;text-align:center;transform:rotate(8deg);font-weight:700}
+  .tabs{display:flex;gap:8px;margin:14px 0 10px}
+  .tabs button{flex:1;padding:10px;border:1.5px solid var(--ink);background:var(--paper);font-size:.95rem;font-weight:700;cursor:pointer;letter-spacing:.15em}
+  .tabs button.on{background:var(--ink);color:#fff}
+  .menu{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+  .card{border:1.5px solid var(--line);background:var(--paper);padding:12px 14px;cursor:pointer;transition:border-color .15s}
+  .card:hover{border-color:var(--ink)}
+  .card.sel{border:2px solid var(--accent);background:#fff}
+  .card .no{font-family:"Yu Mincho",serif;font-weight:700;font-size:1.02rem}
+  .card .desc{font-size:.78rem;color:#4c5a76;margin-top:3px}
+  .bar{display:flex;gap:10px;align-items:center;margin:16px 0;flex-wrap:wrap}
+  .gen{background:var(--accent);color:#fff;border:none;padding:12px 26px;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:.1em}
+  .gen:disabled{background:#b9a5a2;cursor:wait}
+  .ghost{background:none;border:1.5px solid var(--ink);padding:10px 16px;cursor:pointer;font-size:.85rem}
+  .status{font-size:.85rem;color:#4c5a76}
+  /* 問題用紙 */
+  .sheet{background:var(--paper);border:1px solid var(--line);box-shadow:0 2px 8px rgba(27,42,74,.08);padding:34px 38px;margin-top:8px;font-family:"Yu Mincho","Hiragino Mincho ProN",serif;display:none}
+  .sheet h2{font-size:1.05rem;border-bottom:2px solid var(--ink);padding-bottom:6px;margin-bottom:14px;letter-spacing:.08em}
+  .sheet .situ{background:#f4f5f1;border:1px solid var(--line);padding:10px 14px;font-size:.9rem;margin:10px 0}
+  .sheet .passage{white-space:pre-wrap;font-size:.95rem;margin:14px 0;line-height:1.9}
+  .sheet .ptitle{text-align:center;font-weight:700;font-size:1.05rem;margin:10px 0}
+  .q{margin:20px 0 6px}
+  .q .stem{font-weight:700;margin-bottom:8px}
+  .q ol{list-style:none;margin-left:6px}
+  .q li{margin:5px 0;padding-left:2.1em;text-indent:-2.1em;font-size:.95rem}
+  .q li .mk{display:inline-block;width:1.5em;text-align:center;border:1px solid var(--ink);border-radius:50%;font-size:.78rem;margin-right:.5em;line-height:1.45}
+  table.gen-tbl{border-collapse:collapse;margin:12px auto;font-size:.85rem}
+  table.gen-tbl th,table.gen-tbl td{border:1px solid var(--ink);padding:5px 10px;text-align:center}
+  table.gen-tbl th{background:#eceee8}
+  /* 解答・スクリプト */
+  .ansbox{display:none;border-top:2px dashed var(--accent);margin-top:26px;padding-top:16px}
+  .ansbox h3{color:var(--accent);font-size:.95rem;margin-bottom:8px;letter-spacing:.15em}
+  .ansline{margin:10px 0;font-size:.92rem}
+  .ansline b{color:var(--accent)}
+  .script{white-space:pre-wrap;background:#f4f5f1;border:1px solid var(--line);padding:12px 14px;font-size:.9rem;margin:8px 0;font-family:Georgia,serif}
+  .tts{display:none;gap:10px;align-items:center;margin:10px 0;font-family:sans-serif;font-size:.82rem;flex-wrap:wrap}
+  .tts button{border:1.5px solid var(--ink);background:var(--paper);padding:6px 14px;cursor:pointer}
+  .err{display:none;background:#fbeceb;border:1px solid var(--accent);color:#7c231b;padding:10px 14px;margin-top:12px;font-size:.85rem}
+  @media print{
+    body{background:#fff}
+    .tabs,.menu,.bar,.tts,header.hero,.err,.noprint{display:none!important}
+    .sheet{box-shadow:none;border:none;padding:0}
+    .ansbox.show-print{display:block!important}
+  }
+  @media (max-width:600px){.sheet{padding:20px 16px}}
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <h1>共通テスト英語　オリジナル問題ジェネレーター</h1>
+    <div class="sub">令和7年度本試験と同形式・同水準（CEFR A2〜B1中心）のオリジナル問題をAIが作成します。大問を選んで「問題を作成」を押してください。</div>
+    <div class="stamp">授業用<br>教材</div>
+    <div style="position:absolute;bottom:6px;right:14px;font-size:.68rem;color:#8a93a8">v1.7（2026-07-11版）</div>
+  </header>
+
+  <div class="tabs">
+    <button id="tabL" class="on" onclick="setMode('L')">リスニング</button>
+    <button id="tabR" onclick="setMode('R')">リーディング</button>
+  </div>
+
+  <div class="menu" id="menu"></div>
+
+  <div class="bar">
+    <button class="gen" id="bankBtn" onclick="showBank()" disabled style="background:var(--ink)">収録問題を表示（通信不要）</button>
+    <button class="gen" id="genBtn" onclick="generate()" disabled>AIで新作を作成</button>
+    <label style="font-size:.85rem;border:1.5px solid var(--ink);background:var(--paper);padding:9px 12px">
+      問数
+      <select id="qcount" style="font-size:.85rem;border:none;background:none">
+        <option value="1" selected>1問のみ（軽量・確実）</option>
+        <option value="full">フルセット（本試験と同じ問数）</option>
+      </select>
+    </label>
+    <button class="ghost" id="ansBtn" onclick="toggleAns()" style="display:none">解答・スクリプトを表示</button>
+    <button class="ghost noprint" onclick="printSheet(false)" style="display:none" id="printBtn">印刷（問題のみ）</button>
+    <button class="ghost noprint" onclick="printSheet(true)" style="display:none" id="printBtn2">印刷（解答付き）</button>
+    <span class="status" id="status">大問を選択してください</span>
+  </div>
+
+  <div class="tts" id="tts">
+    <button onclick="playAudio()" id="ttsPlay">▶ 音声再生</button>
+    <button onclick="speechSynthesis.cancel()">■ 停止</button>
+    <label>速さ <input type="range" id="rate" min="0.6" max="1.2" step="0.05" value="1.0"></label>
+    <label>男声 <select id="voiceM" style="max-width:170px"></select></label>
+    <label>女声 <select id="voiceW" style="max-width:170px"></select></label>
+    <span id="ttsNote">※ 音質はブラウザ依存です。<b>Microsoft Edge</b>（○○ Online (Natural)音声）または<b>Chrome</b>（Google US English）で開くと自然な英語になります。</span>
+  </div>
+
+  <div class="err" id="err"></div>
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<script>
+const QBANK={"L1A": {"daimon": "第1問Ａ", "situation_jp": null, "passage_title": null, "passage": null, "script": "Question No. 1\nM: I was going to ride my bike to the library, but the front tire is flat, so I'll take the bus instead.", "table": null, "questions": [{"label": "問1", "situation_jp": null, "stem": "英語を聞き、その内容と最もよく合っているものを一つ選びなさい。", "choices": ["The speaker fixed his bike this morning.", "The speaker will go to the library by bus.", "The speaker's bus did not come on time.", "The speaker has already returned his books."], "answer": 2, "explanation": "自転車のタイヤがパンクしたため「代わりにバスで行く」と述べている。①は修理したとは言っていない、③④は本文に言及なし。"}]}, "L1B": {"daimon": "第1問Ｂ", "situation_jp": null, "passage_title": null, "passage": null, "script": "Question No. 1\nW: The cat isn't sleeping on the chair. It's under it, and there's a ball right beside the cat.", "table": null, "questions": [{"label": "問1", "situation_jp": "※実際の試験では絵を選びますが、ここでは絵の内容説明から選んでください。", "stem": "英語を聞き、その内容と最もよく合っている絵を一つ選びなさい。", "choices": ["椅子の上で眠る猫。そばにボールがある。", "椅子の下で眠る猫。そのすぐ横にボールがある。", "椅子の下でボールで遊んでいる猫。", "テーブルの上で眠る猫。ボールはない。"], "answer": 2, "explanation": "not on the chair / under it（椅子の下）と、beside the cat（猫のすぐ横にボール）を両方満たすのは②。"}]}, "L2": {"daimon": "第2問", "situation_jp": null, "passage_title": null, "passage": null, "script": "Question No. 1\nM: Should we get the round chocolate cake?\nW: It's too big for us. Let's get the small square one.\nM: The one with strawberries on top?\nW: Yes, that's it.\nQuestion:\nWhich cake will they buy?", "table": null, "questions": [{"label": "問1", "situation_jp": "姉と弟が、ケーキ店でどれを買うか話をしています。（※選択肢は絵の内容説明です）", "stem": "Which cake will they buy?", "choices": ["大きい丸型のチョコレートケーキ", "小さい四角のケーキ（イチゴなし）", "小さい四角のケーキ（上にイチゴ）", "大きい丸型のケーキ（上にイチゴ）"], "answer": 3, "explanation": "「小さい四角のもの」に決めた後、「上にイチゴがのったもの？」「そう、それ」と確定している。"}]}, "L3": {"daimon": "第3問", "situation_jp": null, "passage_title": null, "passage": null, "script": "Question No. 1\nW: The meeting was supposed to start at two, right?\nM: It's been pushed back thirty minutes. The manager's train is delayed.\nW: Then we have time for coffee.\nM: Sure, but let's be back ten minutes early.", "table": null, "questions": [{"label": "問1", "situation_jp": "同僚同士が、会議の開始時刻について話をしています。", "stem": "When will the meeting start?", "choices": ["At 1:30", "At 2:00", "At 2:20", "At 2:30"], "answer": 4, "explanation": "予定は2時だったが pushed back thirty minutes（30分繰り下げ）なので開始は2時30分。「10分前に戻る」は開始時刻ではない点に注意。"}]}, "L4A": {"daimon": "第4問Ａ", "situation_jp": "あなたは、通学方法に関する校内調査の発表を聞き、グラフの4本の線（空欄18〜21）がどの通学方法かを完成させようとしています。", "passage_title": null, "passage": null, "script": "Questions No. 1 to 4\nWe asked 100 students how they usually come to school, every year for three years. Walking was the most common answer each year, though the number slowly decreased. The number of students taking the bus almost doubled over the three years. Cycling dropped sharply in the second year because of road construction, but it recovered in the third year. Train use stayed the lowest throughout the survey.", "table": {"headers": ["空欄", "グラフ上の線の特徴"], "rows": [["18", "毎年最も多いが、少しずつ減少している"], ["19", "3年間でほぼ2倍に増えている"], ["20", "2年目に急減し、3年目に回復している"], ["21", "3年間を通じて最も少ない"]]}, "questions": [{"label": "問1", "situation_jp": null, "stem": "空欄 18 に入れるのに最も適切なものを選びなさい。", "choices": ["Walking", "Bus", "Cycling", "Train"], "answer": 1, "explanation": "the most common ... slowly decreased がWalkingの説明と一致。"}, {"label": "問2", "situation_jp": null, "stem": "空欄 19 に入れるのに最も適切なものを選びなさい。", "choices": ["Walking", "Bus", "Cycling", "Train"], "answer": 2, "explanation": "almost doubled（ほぼ2倍）はバスの説明。"}, {"label": "問3", "situation_jp": null, "stem": "空欄 20 に入れるのに最も適切なものを選びなさい。", "choices": ["Walking", "Bus", "Cycling", "Train"], "answer": 3, "explanation": "dropped sharply ... but recovered がCyclingの変化と一致。"}, {"label": "問4", "situation_jp": null, "stem": "空欄 21 に入れるのに最も適切なものを選びなさい。", "choices": ["Walking", "Bus", "Cycling", "Train"], "answer": 4, "explanation": "stayed the lowest throughout はTrain。"}]}, "L4B": {"daimon": "第4問Ｂ", "situation_jp": "あなたは、放課後に勉強する場所を決めるために、4人の話を聞いています。\n条件Ａ：静かであること　条件Ｂ：午後8時以降も開いていること　条件Ｃ：無料Wi-Fiが使えること", "passage_title": null, "passage": null, "script": "Question No. 1\n① M: The city library is very quiet, and you can use free Wi-Fi anywhere in the building. It closes at six, though, so you should go right after school.\n② W: Green Café has free Wi-Fi and stays open until ten. Just remember that it gets a little noisy in the evening because of live music.\n③ M: Study Room Aoba is a quiet space that is open until nine every day. Free Wi-Fi is available for members, and membership is free for students.\n④ W: Riverside Center is quiet and open until eight thirty, but there is no Wi-Fi there, so you'll need to bring your own internet.", "table": null, "questions": [{"label": "問1", "situation_jp": null, "stem": "You are most likely to choose 【　】.", "choices": ["The city library", "Green Café", "Study Room Aoba", "Riverside Center"], "answer": 3, "explanation": "3条件をすべて満たすのは③のみ（①はＢ×、②はＡ×、④はＣ×）。"}]}, "L5": {"daimon": "第5問", "situation_jp": "あなたは、食品ロスに関する講義を、ワークシートにメモを取りながら聞いています。\nワークシート：Food is often wasted because people 【 27 】.", "passage_title": null, "passage": null, "script": "Question No. 1\nToday, let's talk about food waste in Japan. About five million tons of food is thrown away every year, and nearly half of it comes from homes, not from restaurants or stores. One reason is that people buy more than they can eat. Another is a misunderstanding about date labels. A \"best-before\" date shows quality, not safety. However, in one survey, sixty percent of people said they throw food away as soon as that date passes. To reduce waste, some cities have started \"food drives,\" where families bring unused food to schools and community centers so that it can be given to people who need it.", "table": null, "questions": [{"label": "問1", "situation_jp": null, "stem": "ワークシートの空欄 27 に入れるのに最も適切なものを選びなさい。", "choices": ["buy only what they really need", "confuse best-before dates with safety limits", "donate too much food to food drives", "eat at restaurants too often"], "answer": 2, "explanation": "best-beforeは品質表示なのに、期限が過ぎるとすぐ捨てる人が60%いる、という誤解が理由として述べられている。①は本文と逆、③④は言及なし。"}]}, "L6A": {"daimon": "第6問Ａ", "situation_jp": "Ken と Amy が、朝の過ごし方について話をしています。", "passage_title": null, "passage": null, "script": "Questions No. 1 and 2\nAmy: You look sleepy, Ken.\nKen: I stayed up late playing games again.\nAmy: I used to do that, but since I started running before breakfast, I go to bed earlier.\nKen: Running? That sounds hard.\nAmy: At first, yes. But now I feel more awake in class, and I eat a better breakfast, too.\nKen: Hmm. I'm not good at getting up early, though.\nAmy: You don't have to run. Even a short walk works. The point is having a reason to get up.\nKen: A walk... I could take my dog. He'd love that.\nAmy: Perfect. Start with just ten minutes.\nKen: OK. I'll try it from tomorrow — and no games after eleven.", "table": null, "questions": [{"label": "問1", "situation_jp": null, "stem": "Which opinion did Amy express during the conversation?", "choices": ["Games help you relax before bed.", "Morning exercise makes her feel more awake in class.", "Running is easy from the very beginning.", "Skipping breakfast saves time in the morning."], "answer": 2, "explanation": "I feel more awake in class と明言している。③は At first, yes（最初は大変）と逆。"}, {"label": "問2", "situation_jp": null, "stem": "What does Ken decide to do by the end of the conversation?", "choices": ["Buy a new dog to walk with", "Play games only in the morning", "Run before breakfast every day", "Walk his dog in the morning and stop late-night games"], "answer": 4, "explanation": "犬の散歩を明日から試し、11時以降のゲームをやめると述べて終わる。走るとは言っていないので③は不可。"}]}, "L6B": {"daimon": "第6問Ｂ", "situation_jp": "三人の生徒（Mika, Tom, Sara）が、校内のペットボトル飲料の販売について話をしています。", "passage_title": null, "passage": null, "script": "Questions No. 1 and 2\nMika: Our school sells about three hundred plastic bottles every week. We should ask them to stop selling them.\nTom: Stop selling drinks completely? On hot days that could be dangerous. Students need something to drink.\nSara: I agree with Mika. Most bottles end up in the wrong bin, so they aren't even recycled.\nTom: But if everyone brings a reusable bottle, where do they refill it? We only have two water fountains.\nMika: That's a good point. Then let's ask for more water stations first, and reduce bottle sales step by step.\nSara: That sounds fair. I can support that plan.\nTom: If there are enough water stations, I'm fine with selling fewer bottles, too.", "table": null, "questions": [{"label": "問1", "situation_jp": null, "stem": "会話が終わった時点で、ペットボトルの販売を「直ちに全面的にやめるべきだ」と考えているのは三人のうち何人でしたか。", "choices": ["0人", "1人", "2人", "3人"], "answer": 1, "explanation": "当初Mikaは即時中止を主張したが、最終的に三人とも「給水機を増やし段階的に減らす」案に合意しており、即時全面中止を主張する者はいない。"}, {"label": "問2", "situation_jp": null, "stem": "会話を踏まえて、Tom の考えの根拠となる図表として最も適切なものを選びなさい。（※選択肢は図表の内容説明です）", "choices": ["夏の気温と熱中症の発生件数の推移を示すグラフ", "学校のリサイクル率の年次推移を示すグラフ", "ペットボトル飲料の売上金額の内訳を示す円グラフ", "生徒に人気の飲み物ランキングの表"], "answer": 1, "explanation": "Tomは「暑い日に飲み物がないと危険」と健康面を根拠にしているため、気温と熱中症の関係を示す図が対応する。"}]}, "R1": {"daimon": "第1問", "situation_jp": "Your host family wants to grow herbs at home. You found this helpful pamphlet.", "passage_title": "Beginners! Grow Your First Herb Garden", "table": null, "script": null, "passage": "Start your wonderful hobby of growing herbs by following these three easy steps!\n\n1. Choose your herbs\nSome herbs, like mint, grow very fast and need their own pot. Others, such as basil and parsley, can share one large container. Check the labels before you buy.\n\n2. Find the right place\nMost herbs need four to six hours of sunlight a day. A windowsill facing south works well. Keep your pots away from air conditioners, which dry out the soil.\n\n3. Water wisely\nTouch the soil first, and water only when the top feels dry. Giving too much water is the most common mistake and can damage the roots.", "questions": [{"label": "問1", "situation_jp": null, "stem": "The people most likely to benefit from this pamphlet are 【 1 】.", "choices": ["experienced farmers looking for professional tools", "herb sellers who want to raise their prices", "newcomers who want to grow herbs at home", "people who need recipes using fresh herbs"], "answer": 3, "explanation": "冒頭の Beginners! と Start your wonderful hobby から、初心者向けと分かる。"}, {"label": "問2", "situation_jp": null, "stem": "When taking care of your herbs, it is a good idea to 【 2 】.", "choices": ["check the soil before watering", "place the pots next to an air conditioner", "put mint and basil together in one small pot", "water them every morning without fail"], "answer": 1, "explanation": "Touch the soil first, and water only when the top feels dry の言い換え。④は「毎朝必ず」が言い過ぎ、②③は本文の助言と逆。"}, {"label": "問3", "situation_jp": null, "stem": "According to the pamphlet, which picture best shows where to put your pots? (The options describe the pictures.)", "choices": ["Pots placed together on a shaded shelf facing north", "Pots on a south-facing windowsill, away from the air conditioner", "Pots directly under the air conditioner", "Pots in the middle of a room with no sunlight"], "answer": 2, "explanation": "a windowsill facing south＋Keep your pots away from air conditioners を両方満たす②が正解。"}]}, "R2": {"daimon": "第2問", "situation_jp": "Your teacher asks you to write a report about keeping rivers clean. To prepare, you read a blog written by a British author.", "passage_title": "River Clean-up: Today and Tomorrow", "table": null, "script": null, "passage": "12 May 2026 — Oliver Bennett, York, UK\n\nYesterday I joined a forum about keeping our local river clean. Three guest speakers discussed the problem of litter.\n\nAll the speakers agreed on three points. First, most of the litter comes from the town centre, carried to the river by wind and rain. Second, volunteers alone cannot solve the problem; the town council must place more bins along the walking paths. Finally, education is essential, and schools should teach children how litter travels into rivers.\n\nAt the end of the forum, the speakers discussed banning single-use plastic bags in local shops. According to one speaker, some towns nearby have already introduced such a ban. A member of the audience asked whether our town would follow. Two speakers said yes, but they disagreed about the timing: one said, \"Within a year,\" and the other said, \"In five years.\" The third speaker said no, because small shops would lose money. I can't wait to find out who is right.\n\nNext week's post is about a beach clean-up project — don't miss it!", "questions": [{"label": "問1", "situation_jp": null, "stem": "Which of the following did all the guest speakers agree on?", "choices": ["A ban on plastic bags will start within a year.", "Litter mostly comes from the beach area.", "Schools should teach how litter reaches rivers.", "Volunteers can solve the problem by themselves."], "answer": 3, "explanation": "第2段落の education is essential, and schools should teach... が全員の合意点。①は一人の予想、④は本文と逆。"}, {"label": "問2", "situation_jp": null, "stem": "One guest speaker's opinion is that 【 5 】.", "choices": ["a bag ban would hurt small shops", "bins along the paths are unnecessary", "plastic bags are already banned in this town", "the river is cleaned by the council every day"], "answer": 1, "explanation": "第3の話者が「小さな店が損をするから反対」と述べている。③は「近隣の町」の話。"}, {"label": "問3", "situation_jp": null, "stem": "Which of the following is mentioned in the blog?", "choices": ["Nearby towns' bans on single-use bags", "The cost of placing new bins", "The number of volunteers at the forum", "A swimming event in the river"], "answer": 1, "explanation": "some towns nearby have already introduced such a ban と言及されている。他は本文にない。"}, {"label": "問4", "situation_jp": null, "stem": "Which of the following is an opinion, not a fact, in the blog?", "choices": ["The forum was held yesterday.", "Next week's post will be about a beach clean-up.", "Small shops would lose money because of a ban.", "Three speakers discussed the litter problem."], "answer": 3, "explanation": "「小さな店が損をするだろう」は話者の予想・意見。他は事実として述べられている。"}]}, "R3": {"daimon": "第3問", "situation_jp": "You are an exchange student at a UK high school, and your teacher asked you to find an interesting story to share in class.", "passage_title": "THE RECIPE", "table": null, "script": null, "passage": "\"Once more, from the beginning!\" I said to my cooking club team.\n\nThe prefectural cooking contest was only two weeks away, and I was the team leader. Our members were skilled. Mei could cut vegetables faster than anyone, and Ryo's special sauces were famous at every school festival. Still, something felt wrong with our dish, and I couldn't tell what it was.\n\nThat night, I watched the video I had taken of our practice. Our curry looked perfect. Then I noticed it: each part was delicious by itself — and that was exactly the problem. The rice was seasoned, the sauce was rich, and the toppings were strongly spiced. Together, they were simply too much. \"We're each showing off,\" I realized.\n\nAt the next practice, I shared my discovery. \"Let's make one taste, not three.\" Mei made her pickles simpler, Ryo made his sauce lighter, and I changed the rice to plain white rice. From that day on, our cooking changed.\n\nWe didn't win the contest. But when the judge said, \"This dish tastes like one kitchen, not three cooks,\" we all smiled. It was the best dish we had ever made.", "questions": [{"label": "問1", "situation_jp": null, "stem": "Which person is telling the story?", "choices": ["Mei", "Ryo", "The judge", "The team leader"], "answer": 4, "explanation": "冒頭で I was the team leader と述べている。"}, {"label": "問2", "situation_jp": null, "stem": "Choose four out of the five options（①〜⑤）and put them in the order they happened.", "choices": ["The team simplified each part of the dish.", "The leader found the problem by watching a video.", "The team entered the contest.", "The judge praised the dish.", "The team bought a new cooking pot."], "answer": "③→②→①→④", "explanation": "大会に出場を決める→動画で問題を発見→各パートを簡素化→審査員が称賛、の順。⑤は本文にない出来事。"}, {"label": "問3", "situation_jp": null, "stem": "How did the team most likely feel after the competition?", "choices": ["Ashamed", "Jealous", "Miserable", "Satisfied"], "answer": 4, "explanation": "優勝はしなかったが we all smiled / the best dish we had ever made から満足していると分かる。"}]}, "R4": {"daimon": "第4問", "situation_jp": "In English class, you are writing an essay. You are now working on improvements based on comments from your teacher.", "passage_title": "Try Walking to School", "table": null, "script": null, "passage": "In modern society, many students take buses or are driven to school even for short distances. Walking has shown us that you do not need vehicles for every trip. This essay will explain the good points of walking to school.\n\nOne key point is health. Walking every day gives you light exercise without any special equipment. (1)　Many students say they have no time for sports. Walking to school turns travel time into exercise time.\n\nAnother point is the environment. Cars produce CO2 even on short trips. One study found that about 30% of school-run car trips are under two kilometres. (2)\n\nThe final point is your mind. Walking in the morning wakes up your brain, and (3)you can relax. Students who walk often say they feel ready for the first class.\n\nIn summary, walking to school helps your body, the Earth, and your mind. Start small: (4)buy new walking shoes this weekend. Your daily trip to school can become the healthiest part of your day.\n\n【Comments】\n(1) Add an appropriate connecting word.\n(2) Add a concluding sentence to improve this paragraph.\n(3) The underlined part isn't your main argument. Rewrite it.\n(4) The underlined part doesn't describe your essay content well. Change it.", "questions": [{"label": "問1", "situation_jp": null, "stem": "Based on Comment (1), which is the best word to add?", "choices": ["However", "Moreover", "Otherwise", "Therefore"], "answer": 1, "explanation": "直前の利点に対し「しかし多くの生徒は運動の時間がない」と課題を示し、次の文で通学＝運動という解決を述べる流れなので逆接のHoweverが適切。"}, {"label": "問2", "situation_jp": null, "stem": "Based on Comment (2), which is the best sentence to add?", "choices": ["Choosing to walk such short trips would cut this pollution.", "Electric cars should be given to every family for free.", "Students should study climate science at university.", "The government must ban all cars from city roads."], "answer": 1, "explanation": "段落の主張（短距離の送迎がCO2を出す）を受けて結論づける文として①が最適。②〜④は主張が飛躍している。"}, {"label": "問3", "situation_jp": null, "stem": "Based on Comment (3), which is the best phrase to replace the underlined part?", "choices": ["you can check your phone safely on the way", "you can prepare your mind for learning", "you can save money on bus fares", "you can spend more time alone"], "answer": 2, "explanation": "この段落の主張は「朝歩くと頭が目覚め、授業の準備ができる」ことなので②が本旨に合う。"}, {"label": "問4", "situation_jp": null, "stem": "Based on Comment (4), which is the best phrase to replace the underlined part?", "choices": ["ask your parents to drive you faster", "take the bus only in the summer", "try walking to school a few days a week", "wear your favorite shoes every day"], "answer": 3, "explanation": "エッセイ全体の内容（徒歩通学のすすめ）を反映した行動提案は③。"}]}, "R5": {"daimon": "第5問", "situation_jp": "As a student volunteer, you are helping organize your school's International Fair. You wrote this email to the teacher in charge and received a reply.", "passage_title": null, "table": null, "script": null, "passage": "October 10 — Event Plan\nDear Ms. Hall,\n\nI am very happy to be the student representative for the International Fair. You mentioned that this event is to introduce different cultures to local families. I hope to study abroad next year, so this experience is very valuable for me. The draft schedule is below.\n\n10:00 Opening speech: Ms. Hall\n10:15 Presentation 1: Food Cultures of Asia (Kenta)\n11:00 Break\n11:15 Presentation 2: (undecided) (Lucy)\n12:00 Lunch\n13:00 Presentation 3: Traditional Games Around the World (Aya)\n14:00 Closing speech: Principal — Title: (undecided)\n\nI would like you to confirm the following points:\n・The fair will be held in the gym.\n・Registration will close three days before the event.\n・Visitors will park in the school parking lot.\n\nStill to be decided:\n・Can we use the cooking room to offer small food samples?\n・Have you received Lucy's presentation title?\n・How should we arrange the desks for the games corner?\n\nThis is my first time leading an event like this, and I am rather nervous, so I would appreciate any advice you have.\n\nStudent representative\n\n---\n\nOctober 12 — Re: Event Plan\nDear representative,\n\nThank you for the draft. You've done a good job. The schedule and the order of events look fine to me. The gym worked well last year, and it is free for school events.\n\nClosing registration three days before the fair is too short. We need a full week to prepare name cards and send maps to visitors. As for parking, the school lot will be open, so visitors will not need a permit.\n\nI have received Lucy's title. She will introduce winter festivals in northern Europe. The principal has also decided his title: \"One School, Many Cultures.\" Regarding the food samples, the cooking room will be under repair that week, so we need to rethink the plan. Do you have any ideas?\n\nFor the games corner, put four desks together in a square so that visitors can play from all sides, and leave space for people waiting in line.\n\nMs. Hall", "questions": [{"label": "問1", "situation_jp": null, "stem": "Based on your email, what is your overall worry about the fair?", "choices": ["A lack of experience leading events", "The cost of renting the gym", "The number of parking permits", "Your English presentation skills"], "answer": 1, "explanation": "my first time leading an event ... rather nervous と述べている。"}, {"label": "問2", "situation_jp": null, "stem": "Which title best matches Ms. Hall's description of Lucy's presentation?", "choices": ["Cooking with Local Vegetables", "The History of Our School Gym", "Snow Sports for Beginners", "Winter Festivals of Northern Europe"], "answer": 4, "explanation": "winter festivals in northern Europe という説明にそのまま対応するのは④。③は「祭り」ではなく「スポーツ」なので不適。"}, {"label": "問3", "situation_jp": null, "stem": "Referring to Ms. Hall's reply, which of the following needs to be reconsidered?", "choices": ["The gym as the venue", "The order of the presentations", "The principal's speech title", "Where to offer the food samples"], "answer": 4, "explanation": "調理室が改修中のため食品サンプルの場所は再検討が必要（登録締切も変更が必要だが、選択肢の中ではこれが該当）。"}, {"label": "問4", "situation_jp": null, "stem": "You will email Ms. Hall again. Which two pieces of information are you most likely to include?\nＡ：An alternative place to offer the food samples\nＢ：The rental fee for the gym\nＣ：A new, earlier registration deadline\nＤ：The number of parking permits needed", "choices": ["Ａ and Ｂ", "Ａ and Ｃ", "Ｂ and Ｄ", "Ｃ and Ｄ"], "answer": 2, "explanation": "返信で求められたのは食品サンプルの代案で、登録締切も1週間前へ変更が必要。体育館は無料、駐車許可証は不要と明言されているのでＢ・Ｄは含めない。"}]}, "R6": {"daimon": "第6問", "situation_jp": "Your friend Naoki has written a story for a writing contest. You read it and then give him feedback.", "passage_title": "Sparky & Me: A True Team", "table": null, "script": null, "passage": "By Naoki Shimada\n\nEveryone in town knows me as the girl with the robot dog. Before, Sparky was just a machine to me, but now, he is my partner. Let me tell you our story.\n\nMy father, an engineer, built Sparky when I was ten. At first, I used him to carry my school bag and to win attention from my classmates. Sparky could run faster than a bicycle, understand about a hundred words, and find things with his smell sensors. But I never said \"thank you\" to him. Why would I? He was a machine.\n\nOne winter evening, my grandmother did not come home from her walk. Snow was falling hard, and the town's rescue team could not search every path before dark. Then I remembered Sparky's sensors. \"Find Grandma,\" I said, showing him her scarf. Sparky ran into the snow, and I followed. Twenty minutes later, we found her sitting by the old bridge with a twisted ankle. While I called my father, Sparky lay down beside her to keep her warm.\n\nThat night, I said \"thank you\" to Sparky for the first time. My father laughed, but I did not care. A partner deserves thanks.\n\nNow Sparky and I visit the town's rescue team every month. We are training to become an official search team — a girl and her robot dog, real partners at last.", "questions": [{"label": "問1", "situation_jp": null, "stem": "Choose four out of the five descriptions（①〜⑤）and put them in the order they occurred.", "choices": ["The girl thanked Sparky for the first time.", "Sparky was built by the girl's father.", "Sparky found the grandmother in the snow.", "The girl used Sparky to impress her classmates.", "Sparky won first prize in a robot contest."], "answer": "②→④→③→①", "explanation": "製作→自慢の道具として使用→祖母を発見→初めて感謝、の順。⑤は本文にない。"}, {"label": "問2", "situation_jp": null, "stem": "Choose the correct combination of Sparky's abilities.\nＡ：fly over the town　Ｂ：run very fast　Ｃ：understand words　Ｄ：detect smells　Ｅ：speak human language　Ｆ：cook meals", "choices": ["Ａ, Ｂ, and Ｃ", "Ｂ, Ｃ, and Ｄ", "Ｃ, Ｄ, and Ｅ", "Ｂ, Ｄ, and Ｆ"], "answer": 2, "explanation": "run faster than a bicycle / understand about a hundred words / smell sensors の3つが本文の記述。"}, {"label": "問3", "situation_jp": null, "stem": "You will suggest that Naoki add a detail that is NOT described in the story. Which is the best suggestion?", "choices": ["How Sparky is powered and charged", "What Sparky did to help the grandmother", "When the girl first thanked Sparky", "Who built Sparky and why the girl received him"], "answer": 1, "explanation": "動力・充電方法だけは本文に一切書かれていない。他はすべて描写済み。"}]}, "R7": {"daimon": "第7問", "situation_jp": "You are preparing a presentation for a social studies project. You found this article and are now completing your outline.", "passage_title": "Cooling Our Cities", "table": null, "script": null, "passage": "If you walk through a city in summer, you may notice that it feels hotter than the nearby countryside. This is called the urban heat island effect. Buildings and roads take in heat during the day and release it at night, keeping city temperatures high even after sunset.\n\nCities are fighting this heat in several ways. One common method is adding green spaces. Trees provide shade, and water evaporating from their leaves cools the air around them. A single large tree can have the cooling power of several air conditioners. Parks also give people cool places to rest.\n\nA second method is changing surfaces. Dark roads and roofs absorb sunlight, so some cities now paint roofs white or use special light-colored pavement that reflects heat. In one test, a white roof was almost 30 degrees cooler than a dark one on the same afternoon.\n\nA third method uses water. Fountains, misting stations, and small streams lower the temperature of the surrounding air. Some cities even spray fine water mist at bus stops in summer.\n\nFinally, city planning itself matters. Leaving open \"wind paths\" between tall buildings lets cool air from rivers and forests flow into the city center. Unlike the other methods, this one must be planned before buildings are built, which is why newly developed areas have an advantage.\n\nAs shown above, keeping cities cool is not one job but many, and each method works best when combined with the others.", "questions": [{"label": "問1", "situation_jp": "Your outline — Why cities are hot: A. Roads release heat at night / B. Buildings absorb heat in the daytime / C. Trees warm the surrounding air / D. City surfaces take in sunlight", "stem": "Under the heading \"Why cities are hot,\" you spotted an error. Which should you remove?", "choices": ["Ａ", "Ｂ", "Ｃ", "Ｄ"], "answer": 3, "explanation": "樹木は空気を冷やす側であり、都市が暑くなる理由ではない。"}, {"label": "問2", "situation_jp": null, "stem": "You want to use a figure for the second method. Which is the best? (The options describe the figures.)", "choices": ["A bar graph comparing the temperatures of a white roof and a dark roof on the same afternoon", "A line graph showing the number of parks in the city over the years", "A pie chart showing the number of bus stop users", "A table comparing the populations of cities and the countryside"], "answer": 1, "explanation": "第3段落の「白い屋根は黒い屋根より約30度低かった」という実験結果に対応する図は①。"}, {"label": "問3", "situation_jp": null, "stem": "Choose the best option for the outline: \"Green spaces cool cities because 【 】.\"", "choices": ["air conditioners are installed in every park", "parks attract many tourists in summer", "trees block the wind paths between buildings", "trees give shade and their leaves release water vapor"], "answer": 4, "explanation": "Trees provide shade, and water evaporating from their leaves cools the air の言い換え。"}, {"label": "問4", "situation_jp": null, "stem": "Choose the best heading for the section about the final method.", "choices": ["Building Wider Roads", "Painting Every Wall White", "Planning Wind Paths in Advance", "Spraying Water at Bus Stops"], "answer": 3, "explanation": "最終段落は建設前に計画すべき「風の通り道」の話。④は第3の方法の内容。"}]}, "R8": {"daimon": "第8問", "situation_jp": "You are working on an essay about digital textbooks. First, read a range of opinions gathered from the Internet. Then, take a position using an additional source.", "passage_title": "Should High Schools Switch to Digital Textbooks?", "table": null, "script": null, "passage": "Akira (teacher)\nDigital textbooks make lessons flexible. Teachers can update materials instantly and add videos or sounds. Students with reading difficulties can enlarge the text or have it read aloud. In my class, slow readers improved the most after we introduced tablets, because they could learn at their own speed.\n\nBeth (doctor)\nLong screen time worries me. Students already spend hours on their phones, and digital textbooks mean even more time looking at screens. Eye strain, poor sleep, and neck pain are increasing among teenagers. Paper gives their eyes a rest, and health should come before convenience.\n\nCarlos (parent)\nCost is the real issue. Tablets break, batteries die, and software needs updating every few years. Paper textbooks can be handed down to younger brothers and sisters. Until schools can lend every student a device for free, digital textbooks will be unfair to some families.\n\nDina (student)\nI support digital textbooks because my school bag is too heavy. Carrying six thick books every day hurts my back. With one tablet, I can also search for words quickly and keep all my notes in one place. Losing a book is no longer a problem, either.\n\n【Source A】\nA 2025 survey of 1,200 high school students found that those who used digital textbooks for more than three hours a day reported tired eyes twice as often as paper users. However, the same survey showed that test scores did not differ between the two groups. The researchers concluded that how long students look at screens matters more than whether their textbooks are digital or paper.", "questions": [{"label": "問1", "situation_jp": null, "stem": "Which of the following best expresses Beth's opinion?", "choices": ["Convenience is critical.", "Health comes first.", "Learning must be fun.", "Price decides everything."], "answer": 2, "explanation": "health should come before convenience がBethの主張の中心。"}, {"label": "問2", "situation_jp": null, "stem": "Both Akira and Dina mention that digital textbooks 【 】.", "choices": ["are unfair to families without devices", "help students learn or work more conveniently as individuals", "harm students' eyes and sleep", "should be used only at university"], "answer": 2, "explanation": "Akiraは自分のペースで学べる点、Dinaは検索やノート管理の便利さと、いずれも個々の生徒にとっての利便性に触れている。"}, {"label": "問3", "situation_jp": "POSITION: Digital textbooks should not be introduced now. — Beth's and Carlos's opinions support this position the most.", "stem": "An argument common to these two people is that 【 】.", "choices": ["both demand that tablets be given to students for free", "both say that paper books are easier to read", "both think the problems outweigh the convenience", "both worry that test scores will fall"], "answer": 3, "explanation": "Bethは健康、Carlosは費用と理由は異なるが、いずれも「利便性より問題の方が大きい」という点で共通する。"}, {"label": "問4", "situation_jp": null, "stem": "Which statement is best supported by Source A?", "choices": ["Digital textbooks always lower students' test scores.", "Digital users studied longer than paper users.", "Paper textbook users scored higher on every test.", "Screen time, rather than textbook type, is the key issue for eye health."], "answer": 4, "explanation": "調査の結論は「デジタルか紙かよりも、画面を見る時間の長さが重要」。テストの点数には差がなかったので①③は誤り。"}]}};
+const SPECS = {
+  L: [
+    {id:"L1A", no:"第1問Ａ", desc:"短い発話（1〜2文）→内容一致の英文4択 ×4問【2回流す】", n:4,
+     spec:"短い発話（話者1人、1〜2文、日常場面）を聞き、内容と最もよく合う英文を4択から選ぶ問題を4問。scriptには各問を『Question No. 1』の見出し＋『M:』または『W:』付き発話で書く。選択肢は言い換え・部分一致の罠を含む短い英文。例の水準: “It was fine this morning when I walked to work, but it’s raining now. Can you drive me home, Lily?” → The speaker is asking Lily for a ride."},
+    {id:"L1B", no:"第1問Ｂ", desc:"短い発話→内容に合う「絵」を選ぶ ×3問（選択肢は絵の説明文で出力）", n:3,
+     spec:"短い発話を聞き、内容に合う絵を選ぶ問題を3問。絵は出力できないため、choicesには①〜④の絵の内容説明（日本語）を書く。発話は位置・数・状態など視覚的に区別できる情報を含める。例: “I’d like that gray one. Not the square one, but the other one, with the white band.”"},
+    {id:"L2", no:"第2問", desc:"短い対話＋英問→絵・図を選ぶ ×3問（選択肢は絵の説明文）【2回流す】", n:3,
+     spec:"4ターン程度の男女の短い対話と、それについての英語のQuestionを聞き、合う絵を選ぶ問題を3問。situation_jpに場面の日本語説明（例:「友達同士が、アプリについて話をしています。」）。choicesは絵の内容説明（日本語）。scriptは M:/W: の対話＋Question: の形式。"},
+    {id:"L3", no:"第3問", desc:"短い対話→英問4択（問いは印刷）×4問【1回】", n:4,
+     spec:"6ターン程度の男女の対話を聞き、印刷された英語の問いに4択で答える問題を4問。各問のsituation_jpに日本語の場面説明、stemに英語の問い（例: What will the man and woman do next?）。選択肢は短い英語句。対話には言い換えや計算・推論（時刻、金額、位置関係など）を1問以上含める。"},
+    {id:"L4A", no:"第4問Ａ", desc:"モノローグ→図表(グラフ/表)の空欄を埋める ×4問【1回】", n:4,
+     spec:"約100語のモノローグ（調査結果・予定・天気予報など）を聞き、表の空欄18〜21に選択肢を対応させる問題。tableフィールドに表（headers/rows。空欄セルは「 18 」のように番号で示す）を必ず出力。questionsは4問（stemは「空欄 18 に入るもの」等）、choicesは共通の選択肢4〜6個。順序・比較表現（steadily decreased, fell sharply など）を使う。"},
+    {id:"L4B", no:"第4問Ｂ", desc:"条件に合う選択肢を選ぶ（4人の話者）×1問【1回】", n:1,
+     spec:"状況（situation_jp）と3つの条件Ａ〜Ｃを日本語で提示し、4人の話者がそれぞれ①〜④の選択肢（店・場所・プランなど）を約40語で紹介するscriptを書く。3条件をすべて満たすのは1つだけにする。questionsは1問、stemは英語（You are most likely to choose ...）、choicesは①〜④の名称。"},
+    {id:"L5", no:"第5問", desc:"講義＋ワークシート完成＋発言一致 ×4問【1回】", n:4,
+     spec:"約180語の社会的テーマの講義（数値データを2つ以上含む）を聞く問題。situation_jpに状況とワークシートの概要（日本語）を書く。問1はワークシートの空欄に入る英文4択、問2〜3は空欄に入る語（共通選択肢6語から）、問4は「Student A / Student B の発言が講義内容と一致するか」（scriptの末尾にStudent A:/Student B:の発言を含め、choicesは『Aのみ一致/Bのみ一致/両方一致/どちらも不一致』）。"},
+    {id:"L6A", no:"第6問Ａ", desc:"長めの対話→英問4択 ×2問【1回】", n:2,
+     spec:"10ターン程度の男女の対話（生活習慣・意見交換）を聞き、英語の問いに4択で答える問題を2問。問1は一方の人物が述べた意見の特定、問2は会話の結末での決断の特定。situation_jpに日本語の状況説明。"},
+    {id:"L6B", no:"第6問Ｂ", desc:"3〜4人の会話→賛否人数＋根拠図表 ×2問【1回】", n:2,
+     spec:"3人の話者（名前付き）がある行動の是非を議論し、途中で立場が変わる会話（約200語）。問1は「会話終了時に反対しているのは何人か」（choices: 1人〜4人等）、問2は「◯◯の考えの根拠となる図表はどれか」（choicesは図表の説明文・日本語）。situation_jpに状況説明。"}
+  ],
+  R: [
+    {id:"R1", no:"第1問", desc:"パンフレット・掲示＋3問（対象者/助言/絵の選択）", n:3,
+     spec:"150語程度のパンフレットまたは案内文（手順1〜3の構成が望ましい）を読み、3問に答える。問1は想定読者、問2は本文からの助言の言い換え、問3は「どの図が最も合うか」（choicesは図の内容を英語で説明した文）。passageに本文、passage_titleにタイトル。"},
+    {id:"R2", no:"第2問", desc:"ブログ・記事＋4問（一致/推論/意見の識別）", n:4,
+     spec:"200語程度のブログ記事（イベント参加報告など、複数の登場人物の意見を含む）を読み4問。全員が一致した点・推論(most likely)・一人の意見(opinion)と事実(fact)の区別・本文に言及された事項、をそれぞれ問う。"},
+    {id:"R3", no:"第3問", desc:"物語文＋3問（語り手/出来事の並べ替え/心情）", n:3,
+     spec:"250語程度の一人称の物語（部活・大会・友情など高校生に身近な題材）。問1は語り手の特定、問2は「5つの出来事から4つを選び起きた順に並べる」（choicesに5つの出来事、answerは『⑤→④→③→①』のような順序の文字列）、問3は結末での心情。"},
+    {id:"R4", no:"第4問", desc:"エッセイ添削（教師コメントに基づく修正）＋4問", n:4,
+     spec:"200語程度の生徒エッセイ（下線部(3)(4)と、(1)(2)の挿入指示を含む）と教師のComments(1)〜(4)をpassageに書く。問1は接続語の選択、問2は結論文の追加、問3・4は下線部の書き換え。各問のstemは Based on Comment (1), ... の形式。"},
+    {id:"R5", no:"第5問", desc:"メール往復（イベント計画）＋5問", n:5,
+     spec:"依頼メールと返信メール（計300語程度、スケジュール表を含む）をpassageに書く。問1は書き手の心配事、問2は未定のタイトルとテーマの対応（choices6個から2つ、answerに両方明記）、問3は再検討が必要な事項、問4は座席配置等の説明に合う図（choicesは図の内容を英語で説明した文）、問5は返信に含めるべき2つの情報の組合せ。"},
+    {id:"R6", no:"第6問", desc:"長めの物語（友人の創作）＋4問（順序/組合せ/含意/欠落情報）", n:4,
+     spec:"300語程度の物語（フィードバックを書く設定）。問1は主人公の変化の並べ替え（answerは順序文字列）、問2は登場人物の能力等の正しい組合せ（A〜Fから4つ）、問3はセリフの含意、問4は「物語に書かれていない要素」2つの選択。"},
+    {id:"R7", no:"第7問", desc:"説明文＋発表アウトライン完成 ＋5問", n:5,
+     spec:"280語程度の説明文（科学・動物・社会テーマ、複数の分類と具体例を含む）と、発表アウトラインの空欄を埋める5問。問1はアウトライン中の誤り除去、問2は図の選択（choicesは図の内容を英語で説明した文）、問3は空欄2つに入る記述（answerに両方明記）、問4は本文内容の言い換え、問5は見出しの選択。"},
+    {id:"R8", no:"第8問", desc:"複数の意見＋立場決定＋アウトライン ＋5問", n:5,
+     spec:"あるテーマについて4人（職業付き）の意見（各50語程度）と、Source A（説明文100語程度）・Source B（数値データの説明）をpassageに書く。問1は特定人物の意見の要約、問2は2人に共通する言及、問3は立場を支持する2人と共通論点（answerに全て明記）、問4・5はSource A/Bに基づく理由・根拠の選択。"}
+  ]
+};
+
+let mode='L', selected=null, current=null, ansShown=false;
+
+function setMode(m){
+  mode=m; selected=null; document.getElementById('genBtn').disabled=true;
+  document.getElementById('bankBtn').disabled=true;
+  document.getElementById('tabL').classList.toggle('on',m==='L');
+  document.getElementById('tabR').classList.toggle('on',m==='R');
+  document.getElementById('status').textContent='大問を選択してください';
+  renderMenu();
+}
+function renderMenu(){
+  const menu=document.getElementById('menu');
+  menu.innerHTML='';
+  SPECS[mode].forEach(s=>{
+    const d=document.createElement('div');
+    d.className='card'+(selected===s.id?' sel':'');
+    d.innerHTML=`<div class="no">${s.no}</div><div class="desc">${s.desc}</div>`;
+    d.onclick=()=>{selected=s.id;renderMenu();
+      document.getElementById('genBtn').disabled=false;
+      document.getElementById('bankBtn').disabled=!QBANK[s.id];
+      document.getElementById('status').textContent=s.no+' を選択中';};
+    menu.appendChild(d);
+  });
+}
+renderMenu();
+
+function buildPrompt(s, n){
+  const kind = mode==='L' ? 'リスニング' : 'リーディング';
+  const one = (n===1 && s.n>1);
+  return `あなたは大学入学共通テスト「英語（${kind}）」の作問者です。令和7年度本試験と同一形式・同水準のオリジナル問題を作成してください。
+
+【形式指定：${s.no}】
+${s.spec}
+
+【共通の作問基準】
+- 語彙・文法はCEFR A2〜B1中心（一部B2）。固有名詞は架空のものを使う。
+- リーディングでは、状況説明(situation_jp)・設問文(stem)・選択肢(choices)をすべて英語で書く（日本語は使わない）。リスニングでは本試験どおり、場面説明は日本語、設問・選択肢は形式指定に従う。
+- explanation（日本語の解説）は全問に必ず付ける。正解の根拠と、まぎらわしい誤答が誤りである理由を書く。
+- 正解の根拠は本文/スクリプト中に明確に1つ。誤答肢は「本文の語の流用」「部分一致」「言い過ぎ」など共通テスト特有の作り方にする。
+- 実在の過去問の題材・数値をそのまま使わず、新しい題材にする。
+- 設問数は${n}問。${one?'本来は複数問のセットだが、今回はこの形式の代表的な設問を1問だけ作る。本文・スクリプトはその1問に必要な範囲だけの短いものにする（本文は最大150語、スクリプトは最大120語）。':''}
+- 出力全体はできるだけ簡潔にする。本文・スクリプトは指定語数を超えない。解説(explanation)は各問1〜2文にとどめる。
+
+【出力形式】次のJSONのみを出力する。前置き・コードフェンス・コメントは一切書かない。
+{
+ "daimon": "${s.no}",
+ "situation_jp": "全体の状況説明（日本語、不要ならnull）",
+ "passage_title": "本文タイトル（リーディングのみ、不要ならnull）",
+ "passage": "本文全文（リーディングのみ。改行は\\n。リスニングはnull）",
+ "script": "音声スクリプト全文（リスニングのみ。M:/W:や Question No. を含む。改行は\\n。リーディングはnull）",
+ "table": {"headers":["列1","列2"],"rows":[["a","b"]]} または null,
+ "questions": [
+   {"label":"問1","situation_jp":"場面説明(不要ならnull)","stem":"設問文",
+    "choices":["選択肢1","選択肢2","選択肢3","選択肢4"],
+    "answer":"正解（番号1〜4、または並べ替え等は文字列で明記）",
+    "explanation":"日本語の解説（正解根拠と主要な誤答の理由）"}
+ ]
+}`;
+}
+
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function showBank(){
+  const q=QBANK[selected];
+  if(!q) return;
+  const t0=performance.now();
+  document.getElementById('err').style.display='none';
+  ansShown=false; speechSynthesis.cancel();
+  current=q; render(q);
+  document.getElementById('status').textContent=q.daimon+'（収録問題）を表示しました（'+((performance.now()-t0)/1000).toFixed(2)+'秒）';
+}
+
+async function callOnce(messages, model){
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model, max_tokens:1000, messages})});
+  let data;
+  try{ data=await res.json(); }
+  catch(_){ throw new Error('サーバー応答の解析に失敗（HTTP '+res.status+'）'); }
+  if(data.error) throw new Error(data.error.message||('APIエラー（HTTP '+res.status+'）'));
+  const text=(data.content||[]).filter(i=>i.type==="text").map(i=>i.text).join("");
+  if(!text) throw new Error('空の応答が返されました');
+  return {text, truncated: data.stop_reason==="max_tokens"};
+}
+
+async function callAPI(messages, st){
+  // ① 通常API → ②リトライ → ③別モデル → ④旧方式(window.claude.complete) の順に自動で切り替える
+  const models=["claude-sonnet-4-6","claude-haiku-4-5-20251001"];
+  let lastErr=null;
+  for(const model of models){
+    for(let attempt=1; attempt<=2; attempt++){
+      try{ return await callOnce(messages, model); }
+      catch(e){
+        lastErr=e;
+        if(st) st.textContent=`通信を再試行しています…（${e.message}）`;
+        await sleep(1500*attempt);
+      }
+    }
+  }
+  if(window.claude && typeof window.claude.complete==='function'){
+    if(st) st.textContent='別方式で作成中…';
+    const joined=messages.map(m=>m.content).join('\n\n上記の続きから出力してください:\n');
+    const text=await window.claude.complete(joined);
+    if(text) return {text, truncated:false};
+  }
+  throw lastErr||new Error('すべての方式で失敗しました');
+}
+
+async function generate(){
+  const s=SPECS[mode].find(x=>x.id===selected);
+  const btn=document.getElementById('genBtn'), st=document.getElementById('status'), err=document.getElementById('err');
+  btn.disabled=true; err.style.display='none'; ansShown=false;
+  speechSynthesis.cancel();
+  st.textContent='作成中…（30〜60秒ほどかかります）';
+  try{
+    const nq = document.getElementById('qcount').value==='1' ? 1 : s.n;
+    const prompt=buildPrompt(s, nq);
+    let out=await callAPI([{role:"user",content:prompt}], st);
+    let full=out.text;
+    // 出力が途中で切れた場合は、続きを最大4回まで自動取得して結合する
+    let tries=0;
+    while(out.truncated && tries<4){
+      tries++;
+      st.textContent=`作成中…（長い問題のため続きを取得しています ${tries}/4）`;
+      out=await callAPI([
+        {role:"user",content:prompt},
+        {role:"assistant",content:full.replace(/\s+$/,'')}
+      ], st);
+      full=full.replace(/\s+$/,'')+out.text;
+    }
+    if(out.truncated) throw new Error('出力が長すぎて完了しませんでした');
+    const clean=full.replace(/```json|```/g,"").trim();
+    const first=clean.indexOf("{"), last=clean.lastIndexOf("}");
+    if(first<0||last<=first) throw new Error('JSONが見つかりませんでした');
+    current=JSON.parse(clean.slice(first,last+1));
+    if(!current.questions||!current.questions.length) throw new Error('設問が空でした');
+    render(current);
+    st.textContent=s.no+' の問題を作成しました。もう一度押すと別の問題を作成します。';
+  }catch(e){
+    console.error(e);
+    err.textContent='問題の作成に失敗しました：'+e.message+'　もう一度「問題を作成」を押してください（同じエラーが続く場合は別の大問でお試しください）。';
+    err.style.display='block';
+    st.textContent='エラー';
+  }finally{ btn.disabled=false; }
+}
+
+const MARKS=['①','②','③','④','⑤','⑥'];
+function esc(t){return String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function render(q){
+  const sheet=document.getElementById('sheet');
+  let h=`<h2>${esc(q.daimon)}　　英語（${mode==='L'?'リスニング':'リーディング'}）`;
+  if(mode==='L') h+=`<span style="float:right;font-size:.8rem;font-weight:400">音声：合成音声で再生可</span>`;
+  h+=`</h2>`;
+  if(q.situation_jp) h+=`<div class="situ">状況：${esc(q.situation_jp)}</div>`;
+  if(q.passage_title) h+=`<div class="ptitle">${esc(q.passage_title)}</div>`;
+  if(q.passage) h+=`<div class="passage">${esc(q.passage)}</div>`;
+  if(q.table&&q.table.headers){
+    h+='<table class="gen-tbl"><tr>'+q.table.headers.map(x=>`<th>${esc(x)}</th>`).join('')+'</tr>';
+    (q.table.rows||[]).forEach(r=>{h+='<tr>'+r.map(c=>`<td>${esc(c)}</td>`).join('')+'</tr>';});
+    h+='</table>';
+  }
+  (q.questions||[]).forEach(qq=>{
+    h+=`<div class="q">`;
+    if(qq.situation_jp) h+=`<div class="situ">${esc(qq.situation_jp)}</div>`;
+    h+=`<div class="stem">${esc(qq.label)}　${esc(qq.stem)}</div><ol>`;
+    (qq.choices||[]).forEach((c,i)=>{h+=`<li><span class="mk">${MARKS[i]||i+1}</span>${esc(c)}</li>`;});
+    h+=`</ol></div>`;
+  });
+  // 解答欄
+  h+=`<div class="ansbox" id="ansbox"><h3>■ 解答・解説${mode==='L'?'・スクリプト':''}</h3>`;
+  if(q.script) h+=`<div class="script">${esc(q.script)}</div>`;
+  (q.questions||[]).forEach(qq=>{
+    const a=(typeof qq.answer==='number')?MARKS[qq.answer-1]||qq.answer:esc(qq.answer);
+    h+=`<div class="ansline"><b>${esc(qq.label)}：${a}</b>　${esc(qq.explanation||'')}</div>`;
+  });
+  h+=`</div>`;
+  sheet.innerHTML=h; sheet.style.display='block';
+  document.getElementById('ansBtn').style.display='inline-block';
+  document.getElementById('ansBtn').textContent='解答・スクリプトを表示';
+  document.getElementById('printBtn').style.display='inline-block';
+  document.getElementById('printBtn2').style.display='inline-block';
+  document.getElementById('tts').style.display=(q.script||q.passage)?'flex':'none';
+  try{sheet.scrollIntoView({behavior:'smooth'});}catch(_){/* 非対応環境では無視 */}
+}
+
+function printSheet(withAnswers){
+  const b=document.getElementById('ansbox');
+  if(b){ b.classList.toggle('show-print', withAnswers); }
+  window.print();
+}
+
+function toggleAns(){
+  ansShown=!ansShown;
+  const b=document.getElementById('ansbox');
+  if(b){b.style.display=ansShown?'block':'none'; b.classList.toggle('show-print',ansShown);}
+  document.getElementById('ansBtn').textContent=ansShown?'解答・スクリプトを隠す':'解答・スクリプトを表示';
+}
+
+/* ---- TTS: 高品質音声の自動選択＋手動切替。文単位で自然に読み上げ ---- */
+function voiceScore(v){
+  // ニューラル/オンライン音声を最優先、次にGoogle、Apple高品質、最後にローカルの機械音声
+  let s=0;
+  if(/natural/i.test(v.name)) s+=100;          // Edge: Microsoft Ava Online (Natural) 等
+  if(/online/i.test(v.name)) s+=40;
+  if(/google/i.test(v.name)) s+=60;            // Chrome: Google US English
+  if(/premium|enhanced|siri/i.test(v.name)) s+=50; // Safari高品質
+  if(/samantha|daniel|karen|moira|alex/i.test(v.name)) s+=20;
+  if(v.lang==='en-US') s+=15; else if(v.lang==='en-GB') s+=10;
+  if(v.localService===false) s+=10;            // クラウド音声は概して高品質
+  if(/espeak|compact/i.test(v.name)) s-=100;   // 明確に機械的な音声を除外
+  return s;
+}
+function isFemaleName(n){return /ava|aria|emma|jenny|michelle|sonia|libby|female|samantha|karen|victoria|zira|kate|susan|catherine|serena|moira|tessa|fiona|joanna|salli|kendra|ivy|zoe/i.test(n)}
+function isMaleName(n){return /andrew|brian|guy|christopher|eric|roger|ryan|thomas|male|daniel|alex|fred|david|george|james|matthew|joey|justin|kevin|oliver/i.test(n)}
+
+function populateVoices(){
+  const vs=speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.startsWith('en')).sort((a,b)=>voiceScore(b)-voiceScore(a));
+  const selM=document.getElementById('voiceM'), selW=document.getElementById('voiceW');
+  if(!selM||!vs.length) return;
+  const keepM=selM.value, keepW=selW.value;
+  selM.innerHTML=''; selW.innerHTML='';
+  vs.forEach(v=>{
+    const label=v.name.replace(/Microsoft |Online |\(Natural\)/g,'').trim()+' ['+v.lang+']';
+    selM.add(new Option(label, v.name));
+    selW.add(new Option(label, v.name));
+  });
+  // 既定値：性別が判定できる最高スコアの音声を選ぶ
+  const bestM=vs.find(v=>isMaleName(v.name))||vs[1]||vs[0];
+  const bestW=vs.find(v=>isFemaleName(v.name))||vs[0];
+  selM.value=(keepM&&vs.some(v=>v.name===keepM))?keepM:bestM.name;
+  selW.value=(keepW&&vs.some(v=>v.name===keepW))?keepW:bestW.name;
+}
+function getVoice(sel){
+  const name=document.getElementById(sel).value;
+  return speechSynthesis.getVoices().find(v=>v.name===name)||null;
+}
+function speakText(text, voice, rate){
+  // 文単位に分割して読み上げると、抑揚が保たれ長文でも途切れにくい
+  const sentences=text.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g)||[text];
+  sentences.forEach(t=>{
+    t=t.trim(); if(!t) return;
+    const u=new SpeechSynthesisUtterance(t);
+    u.lang=(voice&&voice.lang)||'en-US'; u.rate=rate; u.pitch=1.0;
+    if(voice)u.voice=voice;
+    speechSynthesis.speak(u);
+  });
+}
+function playAudio(){
+  if(!current) return;
+  populateVoices();
+  if(current.script) return playScriptLines(current.script);
+  if(current.passage){
+    speechSynthesis.cancel();
+    const rate=parseFloat(document.getElementById('rate').value);
+    const narrator=getVoice('voiceW');
+    current.passage.split('\n').map(l=>l.trim()).filter(l=>l&&!/[ぁ-んァ-ン一-龥【]/.test(l)).forEach(t=>{
+      speakText(t, narrator, rate);
+    });
+  }
+}
+function playScriptLines(scriptText){
+  speechSynthesis.cancel();
+  const rate=parseFloat(document.getElementById('rate').value);
+  const male=getVoice('voiceM'), female=getVoice('voiceW');
+  const lines=scriptText.split('\n').map(l=>l.trim()).filter(l=>l);
+  lines.forEach(line=>{
+    let voice=male, text=line;
+    const m=line.match(/^(①|②|③|④)?\s*(M|W|Question|Student A|Student B|[A-Z][a-z]+)\s*[:：]\s*(.*)$/);
+    if(m){ text=m[3]||m[2];
+      voice=(m[2]==='W'||isFemaleName(m[2]))?female:male; }
+    if(/^(Question No\.|Questions No\.|第|これで|では|次に)/.test(line)) return; // 進行指示はスキップ
+    if(!text||/^[ぁ-んァ-ン一-龥【]/.test(text)) return;
+    speakText(text, voice, rate);
+  });
+}
+if(typeof speechSynthesis!=='undefined'){
+  populateVoices();
+  speechSynthesis.onvoiceschanged=populateVoices; // 音声リストは非同期で届くため再取得
+}
+</script>
+
+</body>
+</html>
